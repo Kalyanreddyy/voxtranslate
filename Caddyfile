@@ -1,0 +1,31 @@
+# VoxTranslate - Caddy Reverse Proxy
+# For local network access, use the Mac Studio's hostname or IP
+# For internet access, replace with your domain
+
+:80 {
+    # API routes -> FastAPI backend
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # SSE routes need longer timeouts
+    handle /api/jobs/*/events {
+        reverse_proxy backend:8000 {
+            flush_interval -1
+            transport http {
+                read_timeout 0
+            }
+        }
+    }
+
+    # Everything else -> Next.js frontend
+    handle {
+        reverse_proxy frontend:3000
+    }
+
+    # Logging
+    log {
+        output stdout
+        format console
+    }
+}

@@ -1,0 +1,140 @@
+version: "3.9"
+
+services:
+  # ============================================================
+  # PostgreSQL - Persistent storage for jobs, users, audit logs
+  # ============================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: voxtranslate-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: voxtranslate
+      POSTGRES_USER: voxtranslate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voxtranslate_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voxtranslate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # Redis - Message broker for Celery + pub/sub for SSE
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: voxtranslate-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # FastAPI Backend - API server
+  # ============================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: voxtranslate-api
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    environment:
+      DATABASE_URL: postgresql+asyncpg://voxtranslate:${POSTGRES_PASSWORD:-voxtranslate_secret}@postgres:5432/voxtranslate
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      STORAGE_PATH: /data/voxtranslate
+    volumes:
+      - storage_data:/data/voxtranslate
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ============================================================
+  # Celery Workers - Pipeline execution (4 concurrent workers)
+  # ============================================================
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: voxtranslate-worker
+    restart: unless-stopped
+    command: celery -A app.pipeline.tasks worker --loglevel=info --concurrency=4 -Q default,priority
+    environment:
+      DATABASE_URL: postgresql+psycopg2://voxtranslate:${POSTGRES_PASSWORD:-voxtranslate_secret}@postgres:5432/voxtranslate
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      STORAGE_PATH: /data/voxtranslate
+    volumes:
+      - storage_data:/data/voxtranslate
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ============================================================
+  # Next.js Frontend
+  # ============================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        BACKEND_URL: http://backend:8000
+    container_name: voxtranslate-web
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  # ============================================================
+  # Caddy - Reverse proxy with auto HTTPS
+  # ============================================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: voxtranslate-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  storage_data:
+  caddy_data:
+  caddy_config:

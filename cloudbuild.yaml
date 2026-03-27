@@ -1,0 +1,58 @@
+steps:
+  # Build backend
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/voxtranslate/backend:$COMMIT_SHA', './backend']
+
+  # Build frontend
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/voxtranslate/frontend:$COMMIT_SHA', './frontend']
+
+  # Push backend image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/voxtranslate/backend:$COMMIT_SHA']
+
+  # Push frontend image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/voxtranslate/frontend:$COMMIT_SHA']
+
+  # Deploy backend API
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'voxtranslate-api'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/voxtranslate/backend:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+
+  # Deploy worker
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'voxtranslate-worker'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/voxtranslate/backend:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+
+  # Deploy frontend
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'voxtranslate-web'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/voxtranslate/frontend:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/voxtranslate/backend:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/voxtranslate/frontend:$COMMIT_SHA'
+
+timeout: '1800s'
