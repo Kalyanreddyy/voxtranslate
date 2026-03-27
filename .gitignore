@@ -64,3 +64,4 @@ caddy_config/
 # Exports
 *.docx
 backend/cookies.txt
+backend/cookies.txt
