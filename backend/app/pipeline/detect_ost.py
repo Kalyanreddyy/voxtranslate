@@ -137,6 +137,7 @@ async def _process_frames_batch(frames: list, api_key: str) -> list:
         batch = frames[batch_idx : batch_idx + batch_size]
 
         logger.info(f"Processing batch {batch_idx // batch_size + 1} of {(len(frames) + batch_size - 1) // batch_size}")
+        import time; time.sleep(12)
 
         try:
             items = await _analyze_frame_batch(batch, api_key)
@@ -206,7 +207,7 @@ Return JSON format:
             "https://api.anthropic.com/v1/messages",
             headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
             json={
-                "model": "claude-sonnet-4-5",
+                "model": "claude-haiku-4-5-20251001",
                 "max_tokens": 1024,
                 "messages": [{"role": "user", "content": content}],
             },
