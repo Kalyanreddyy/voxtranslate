@@ -1,3 +1,4 @@
+from decimal import Decimal
 """Celery task definitions for the video translation pipeline."""
 
 import json
@@ -170,7 +171,7 @@ async def _process_video_async(job_id: str):
             transcription = await transcribe_video(video_path, settings.ELEVENLABS_API_KEY)
             job.transcription = transcription
             job.progress_pct = 40
-            job.cost_usd += 0.01  # Placeholder cost
+            job.cost_usd += Decimal("0.01")  # Placeholder cost
             await session.commit()
             await publish_job_event(
                 job_id, "stage_complete", {"stage": "transcribing", "progress": 40}
@@ -197,7 +198,7 @@ async def _process_video_async(job_id: str):
             ost_detection = await detect_ost(video_path, settings.ANTHROPIC_API_KEY)
             job.ost_detection = ost_detection
             job.progress_pct = 60
-            job.cost_usd += 0.05  # Placeholder cost
+            job.cost_usd += Decimal("0.05")  # Placeholder cost
             await session.commit()
             await publish_job_event(
                 job_id, "stage_complete", {"stage": "detecting_ost", "progress": 60}
@@ -219,7 +220,7 @@ async def _process_video_async(job_id: str):
             )
             job.translation = translation
             job.progress_pct = 80
-            job.cost_usd += 0.10  # Placeholder cost
+            job.cost_usd += Decimal("0.1")  # Placeholder cost
             await session.commit()
             await publish_job_event(
                 job_id, "stage_complete", {"stage": "translating", "progress": 80}
@@ -342,7 +343,7 @@ async def _resume_after_transcription_review_async(job_id: str):
                 return
 
             # Get video path from metadata
-            video_path = job.metadata_.get("path") if job.metadata_ else None
+            video_path = (job.metadata_ or {}).get("path") or (job.metadata_ or {}).get("upload_path")
             if not video_path:
                 raise ValueError("Video path not found in job metadata")
 
@@ -357,7 +358,7 @@ async def _resume_after_transcription_review_async(job_id: str):
             ost_detection = await detect_ost(video_path, settings.ANTHROPIC_API_KEY)
             job.ost_detection = ost_detection
             job.progress_pct = 60
-            job.cost_usd += 0.05
+            job.cost_usd += Decimal("0.05")
             await session.commit()
             await publish_job_event(
                 job_id, "stage_complete", {"stage": "detecting_ost", "progress": 60}
@@ -381,7 +382,7 @@ async def _resume_after_transcription_review_async(job_id: str):
             )
             job.translation = translation
             job.progress_pct = 80
-            job.cost_usd += 0.10
+            job.cost_usd += Decimal("0.1")
             await session.commit()
             await publish_job_event(
                 job_id, "stage_complete", {"stage": "translating", "progress": 80}

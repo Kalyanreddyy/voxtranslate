@@ -78,9 +78,9 @@ services:
       dockerfile: Dockerfile
     container_name: voxtranslate-worker
     restart: unless-stopped
-    command: celery -A app.pipeline.tasks worker --loglevel=info --concurrency=4 -Q default,priority
+    command: celery -A celery_worker worker --loglevel=info --concurrency=4 -Q celery,default,priority
     environment:
-      DATABASE_URL: postgresql+psycopg2://voxtranslate:${POSTGRES_PASSWORD:-voxtranslate_secret}@postgres:5432/voxtranslate
+      DATABASE_URL: postgresql+asyncpg://voxtranslate:${POSTGRES_PASSWORD:-voxtranslate_secret}@postgres:5432/voxtranslate
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2

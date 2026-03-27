@@ -35,6 +35,52 @@ async def get_transcription_for_review(
     try:
         result = await session.execute(select(Job).where(Job.id == job_id))
         job = result.scalar_one_or_none()
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Job {job_id} not found",
+            )
+        if job.status != JobStatus.AWAITING_TRANSCRIPTION_REVIEW:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Job is not awaiting transcription review (status: {job.status})",
+            )
+        raw_segments = (job.transcription or {}).get("segments", [])
+        normalized = []
+        for seg in raw_segments:
+            text = " ".join(u.get("text", "") for u in seg.get("utterances", []))
+            if not text:
+                text = seg.get("text", "")
+            normalized.append({
+                "start": seg.get("start_time", seg.get("start", 0)),
+                "end": seg.get("end_time", seg.get("end", 0)),
+                "text": text.strip(),
+                "speaker": seg.get("speaker", "speaker_0"),
+            })
+        return {
+            "job_id": str(job.id),
+            "video_title": job.video_title,
+            "transcription": {**(job.transcription or {}), "segments": normalized},
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting transcription for review {job_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve transcription",
+        )
+
+
+@router.get("/{job_id}/translation", status_code=status.HTTP_200_OK)
+async def get_translation_for_review(
+    job_id: UUID,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Get current translation data for editing."""
+    try:
+        result = await session.execute(select(Job).where(Job.id == job_id))
+        job = result.scalar_one_or_none()
 
         if not job:
             raise HTTPException(

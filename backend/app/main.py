@@ -9,7 +9,8 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.db import create_tables, health_check
-from app.routes import batch, chunks, jobs, stats, review, users
+from app.routes import batch, chunks, jobs, stats, review, users, upload
+import app.pipeline.upload_tasks  # noqa
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(review.router, prefix="/api", tags=["review"])
     app.include_router(users.router, prefix="/api", tags=["users"])
     app.include_router(chunks.router, prefix="/api", tags=["chunks"])
+    app.include_router(upload.router, prefix="/api", tags=["upload"])
 
     # Root endpoint
     @app.get("/")

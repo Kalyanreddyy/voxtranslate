@@ -60,7 +60,7 @@ export default function TranscriptionReviewPage() {
 
         // Fetch transcription
         const transcriptionRes = await reviewApi.getTranscription(jobId)
-        setSegments(transcriptionRes.segments || [])
+        setSegments((transcriptionRes as any).transcription?.segments || transcriptionRes.segments || [])
         setError('')
       } catch (err) {
         console.error('Failed to fetch data:', err)

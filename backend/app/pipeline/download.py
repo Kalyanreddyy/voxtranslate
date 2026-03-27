@@ -34,12 +34,14 @@ async def download_video(url: str, output_dir: str) -> dict:
 
         def download():
             ydl_opts = {
-                "format": "best[height<=720]",
+                "format": "best",
                 "outtmpl": str(output_dir / "%(id)s.%(ext)s"),
                 "quiet": False,
                 "no_warnings": False,
                 "extract_flat": False,
                 "writeinfo_json": True,
+                "cookiefile": "/app/cookies.txt",
+                "proxy": "http://aigmfnoz:seq5hv7diy72@31.59.20.176:80",
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

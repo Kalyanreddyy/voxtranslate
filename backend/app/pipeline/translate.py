@@ -1,3 +1,4 @@
+import time
 """Translation module using Claude API."""
 
 import logging
@@ -59,7 +60,7 @@ async def translate_content(
                     "anthropic-version": "2023-06-01",
                 },
                 json={
-                    "model": "claude-3-5-sonnet-20241022",
+                    "model": "claude-sonnet-4-5",
                     "max_tokens": 4096,
                     "messages": [{"role": "user", "content": prompt}],
                 },

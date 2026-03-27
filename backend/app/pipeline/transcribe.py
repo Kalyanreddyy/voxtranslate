@@ -7,13 +7,26 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-async def transcribe_video(video_path: str, api_key: str) -> dict:
+async def transcribe_video(
+    video_path: str,
+    api_key: str,
+    language_code: str = "",
+    tag_audio_events: bool = True,
+    diarize: bool = True,
+    include_subtitles: bool = False,
+    no_verbatim: bool = False,
+) -> dict:
     """
-    Transcribe video audio using ElevenLabs Scribe.
+    Transcribe video audio using ElevenLabs Scribe v2.
 
     Args:
         video_path: Path to video file
         api_key: ElevenLabs API key
+        language_code: Source language code (empty = auto-detect)
+        tag_audio_events: Tag non-speech audio events
+        diarize: Enable speaker diarization
+        include_subtitles: Request SRT/VTT subtitle output
+        no_verbatim: Clean up filler words
 
     Returns:
         Dictionary with transcription data
@@ -33,14 +46,26 @@ async def transcribe_video(video_path: str, api_key: str) -> dict:
         with open(audio_path, "rb") as f:
             audio_data = f.read()
 
+        # Build Scribe API params
+        data: dict = {
+            "model_id": "scribe_v2",
+            "diarize": "true" if diarize else "false",
+            "timestamps_granularity": "word",
+            "tag_audio_events": "true" if tag_audio_events else "false",
+        }
+
+        # Only set language_code if not auto-detect
+        if language_code and language_code not in ("", "auto"):
+            data["language_code"] = language_code
+
+        # Subtitle formats
+        if include_subtitles:
+            data["additional_formats"] = '[{"format":"srt"},{"format":"vtt"}]'
+
         # Call ElevenLabs API
         async with httpx.AsyncClient(timeout=300.0) as client:
             files = {"file": ("audio.wav", audio_data, "audio/wav")}
-            data = {
-                "model_id": "scribe_v1",
-                "diarize": "true",
-                "timestamps_granularity": "word",
-            }
+
 
             response = await client.post(
                 "https://api.elevenlabs.io/v1/speech-to-text",
@@ -113,13 +138,37 @@ async def _extract_audio(video_path: str) -> str:
     return await loop.run_in_executor(None, run_ffmpeg)
 
 
+def _words_to_utterances(words: list) -> list:
+    """Convert scribe_v2 word-level output into utterance-like chunks."""
+    if not words:
+        return []
+    utterances = []
+    current = {"text": "", "start_time": 0, "end_time": 0, "speaker": "speaker_0"}
+    block_duration = 30
+    for word in words:
+        if word.get("type") == "spacing":
+            continue
+        start = word.get("start", 0)
+        text = word.get("text", "")
+        if not current["text"] or start - current["start_time"] < block_duration:
+            current["text"] += (" " if current["text"] else "") + text
+            current["end_time"] = word.get("end", start)
+            if not current["text"] or current["start_time"] == 0:
+                current["start_time"] = start
+        else:
+            utterances.append(current)
+            current = {"text": text, "start_time": start, "end_time": word.get("end", start), "speaker": word.get("speaker_id", "speaker_0")}
+    if current["text"]:
+        utterances.append(current)
+    return utterances
+
 def _segment_transcription(data: dict) -> list:
     """Segment transcription into 1-minute blocks."""
     segments = []
     current_segment = None
     segment_duration = 60
 
-    utterances = data.get("utterances", [])
+    utterances = data.get("utterances", []) or _words_to_utterances(data.get("words", []))
 
     for utterance in utterances:
         start_time = utterance.get("start_time", 0)
